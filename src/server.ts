@@ -172,6 +172,6 @@ app.post('/webhook/gitlab', async (req: Request, res: Response) => {
   }
 })
 
-app.listen(config.PORT, () => {
+app.listen(config.PORT, '0.0.0.0', () => {
   logger.info('Webhook service started', { port: config.PORT })
 })
