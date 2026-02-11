@@ -1,6 +1,6 @@
 # Sonar GitLab Webhook Service
 
-Service receives GitLab merge request webhooks, fetches SonarQube issues by MR ID, and upserts a comment in the target merge request.
+Service receives GitLab webhooks (`merge_request` and `pipeline`), fetches SonarQube issues by MR ID, and upserts a comment in the target merge request.
 
 ## Environment
 
@@ -61,9 +61,18 @@ Set webhook URL to:
 
 Set secret token in GitLab webhook settings and same value in `.env` as `WEBHOOK_SECRET`.
 
-Enable merge request events.
+Enable:
 
-Processed actions: `opened`, `reopened`, `updated`.
+- merge request events
+- pipeline events
+
+Merge request actions processed: `opened`, `reopened`, `updated`.
+
+Pipeline events processing:
+
+- service reads `object_attributes.sha`
+- finds open merge requests linked to this commit SHA
+- processes all found open merge requests
 
 ## Postman testing
 
@@ -105,10 +114,41 @@ Expected result:
 - HTTP `200`
 - JSON contains `accepted: true` and `processed: true`
 
+### 3) Pipeline webhook (`/webhook/gitlab`)
+
+- Method: `POST`
+- URL: `http://localhost:3004/webhook/gitlab`
+- Headers:
+  - `Content-Type: application/json`
+  - `X-Gitlab-Token: <WEBHOOK_SECRET>`
+- Body (`raw`, JSON):
+
+```json
+{
+  "object_kind": "pipeline",
+  "project": {
+    "path_with_namespace": "gitlab-project/implementation"
+  },
+  "object_attributes": {
+    "id": 98765,
+    "sha": "0123456789abcdef0123456789abcdef01234567",
+    "status": "running",
+    "source": "merge_request_event"
+  }
+}
+```
+
+Expected result:
+- HTTP `200`
+- JSON contains `accepted: true`
+- If SHA is linked to open MR(s), response contains `processed: true` and `processedMergeRequests`
+- If no open MR linked to SHA, response contains `processed: false` with reason
+
 ### Negative checks
 
 - Wrong `X-Gitlab-Token` -> HTTP `401`
 - `action: "closed"` -> HTTP `200` with `processed: false`
+- Pipeline payload without `object_attributes.sha` -> HTTP `200` with `processed: false`
 - Invalid MR ID for `/process/:mrId` (for example `/process/abc`) -> HTTP `400`
 
 ## Docker

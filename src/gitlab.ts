@@ -1,6 +1,6 @@
 import { config } from './index'
 import { fetchWithRetry, gitlabApiUrl } from './http'
-import type { GitLabNote } from './types'
+import type { GitLabMergeRequestRef, GitLabNote } from './types'
 
 const BOT_MARKER = '<!-- sonar-mr-bot -->'
 
@@ -17,6 +17,10 @@ function encodedProject(projectPath: string): string {
 
 function notesUrl(projectPath: string, mrId: string): string {
   return gitlabApiUrl(`/projects/${encodedProject(projectPath)}/merge_requests/${mrId}/notes`)
+}
+
+function commitMergeRequestsUrl(projectPath: string, sha: string): string {
+  return gitlabApiUrl(`/projects/${encodedProject(projectPath)}/repository/commits/${encodeURIComponent(sha)}/merge_requests`)
 }
 
 export async function listMergeRequestNotes(projectPath: string, mrId: string): Promise<GitLabNote[]> {
@@ -64,6 +68,19 @@ export async function updateMergeRequestNote(
   }
 
   return (await response.json()) as GitLabNote
+}
+
+export async function listMergeRequestsByCommit(projectPath: string, sha: string): Promise<GitLabMergeRequestRef[]> {
+  const response = await fetchWithRetry(commitMergeRequestsUrl(projectPath, sha), {
+    method: 'GET',
+    headers: headers()
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to list merge requests by commit: ${response.status} ${response.statusText}`)
+  }
+
+  return (await response.json()) as GitLabMergeRequestRef[]
 }
 
 export async function upsertBotComment(

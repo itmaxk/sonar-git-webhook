@@ -13,6 +13,23 @@ export interface GitLabMergeRequestWebhookPayload {
   object_attributes?: GitLabWebhookAttributes
 }
 
+export interface GitLabPipelineProject {
+  path_with_namespace?: string
+}
+
+export interface GitLabPipelineAttributes {
+  id?: number
+  sha?: string
+  status?: string
+  source?: string
+}
+
+export interface GitLabPipelineWebhookPayload {
+  object_kind?: string
+  project?: GitLabPipelineProject
+  object_attributes?: GitLabPipelineAttributes
+}
+
 export interface SonarIssue {
   key: string
   rule: string
@@ -31,6 +48,11 @@ export interface SonarIssuesResponse {
 export interface GitLabNote {
   id: number
   body: string
+}
+
+export interface GitLabMergeRequestRef {
+  iid: number
+  state?: string
 }
 
 export interface ProcessResult {

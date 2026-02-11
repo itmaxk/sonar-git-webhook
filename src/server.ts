@@ -1,9 +1,10 @@
 import express, { type Request, type Response } from 'express'
 import { isProcessableAction, normalizeMrAction } from './actions'
 import { processMergeRequest } from './app'
+import { listMergeRequestsByCommit } from './gitlab'
 import { config } from './index'
 import { logger } from './logger'
-import type { GitLabMergeRequestWebhookPayload } from './types'
+import type { GitLabMergeRequestWebhookPayload, GitLabPipelineWebhookPayload } from './types'
 
 const app = express()
 app.use(express.json({ limit: '1mb' }))
@@ -38,6 +39,79 @@ app.post('/webhook/gitlab', async (req: Request, res: Response) => {
   }
 
   const payload = req.body as GitLabMergeRequestWebhookPayload
+
+  if (payload.object_kind === 'pipeline') {
+    const pipelinePayload = req.body as GitLabPipelineWebhookPayload
+    const sha = pipelinePayload.object_attributes?.sha
+    const pipelineId = pipelinePayload.object_attributes?.id
+    const pipelineStatus = pipelinePayload.object_attributes?.status
+    const pipelineSource = pipelinePayload.object_attributes?.source
+    const projectPath = pipelinePayload.project?.path_with_namespace || config.GITLAB_PROJECT
+
+    if (!sha || sha.trim().length === 0) {
+      return res.status(200).json({
+        accepted: true,
+        processed: false,
+        reason: 'Missing object_attributes.sha'
+      })
+    }
+
+    try {
+      const mergeRequests = await listMergeRequestsByCommit(projectPath, sha)
+      const openedMergeRequests = mergeRequests.filter((mr) => mr.state === 'opened')
+
+      if (openedMergeRequests.length === 0) {
+        return res.status(200).json({
+          accepted: true,
+          processed: false,
+          object_kind: 'pipeline',
+          pipelineId,
+          pipelineStatus,
+          pipelineSource,
+          reason: 'No opened merge requests linked to commit'
+        })
+      }
+
+      const results = await Promise.all(
+        openedMergeRequests.map(async (mr) => processMergeRequest(String(mr.iid), projectPath))
+      )
+
+      return res.status(200).json({
+        accepted: true,
+        processed: true,
+        object_kind: 'pipeline',
+        pipelineId,
+        pipelineStatus,
+        pipelineSource,
+        projectPath,
+        sha,
+        processedMergeRequests: results.map((result) => ({
+          mrId: result.mrId,
+          issuesCount: result.issuesCount,
+          noteMode: result.noteMode
+        }))
+      })
+    } catch (error) {
+      logger.error('Pipeline webhook processing failed', {
+        projectPath,
+        sha,
+        pipelineId,
+        pipelineStatus,
+        pipelineSource,
+        error: String(error)
+      })
+
+      return res.status(500).json({
+        accepted: false,
+        processed: false,
+        object_kind: 'pipeline',
+        pipelineId,
+        pipelineStatus,
+        pipelineSource,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
 
   if (payload.object_kind !== 'merge_request') {
     return res.status(200).json({

@@ -1,4 +1,4 @@
-import { config } from './index'
+﻿import { config } from './index'
 import { fetchWithRetry } from './http'
 import type { SonarIssue, SonarIssuesResponse } from './types'
 
@@ -49,7 +49,7 @@ export function formatSonarIssues(issues: SonarIssue[], total: number): string {
     return severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity)
   })
 
-  const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+  const separator = '----------------------------------------'
   let out = `Total Issues: ${total}\n\n`
 
   for (const severity of severityOrder) {
@@ -63,7 +63,7 @@ export function formatSonarIssues(issues: SonarIssue[], total: number): string {
     for (const [index, issue] of bucket.entries()) {
       const location = issue.line ? `${issue.component}:${issue.line}` : issue.component
       const num = String(index + 1).padStart(2, '0')
-      out += `${num}~ ❌ ${location}\n`
+      out += `${num}. - ${location}\n`
       out += `    Message: ${issue.message}\n`
       out += `    Status: ${issue.status}\n`
     }
